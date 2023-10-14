@@ -3,37 +3,71 @@ stck segment para 'stack'
 stck ends
 
 data segment para 'data'
-    time_aux          db 0                   ; to check if time has elapsed
+    ; game & window-related
+    time_aux          db 0                    ; to check if time has elapsed
 
     max_width         dw 640
     max_height        dw 480
 
-    border_x          dw 00h                 ; helper var to draw border (x pos of pointer)
-    border_y          dw 00h                 ; helper var to draw border (y pos of pointer)
+    border_x          dw ?                    ; helper var to draw border (x pos of pointer)
+    border_y          dw ?                    ; helper var to draw border (y pos of pointer)
 
-    p1_x              dw 106                 ; x position of player 1 (640 / 2 - 2 * (640 / 2 / 3))
-    p1_y              dw 240                 ; y position of player 1 (480 / 2)
+    ; player-related
+    p1_x              dw ?                    ; x position of player 1
+    p1_y              dw ?                    ; y position of player 1
 
-    v1_x              dw 1                   ; x velocity of player 1
-    v1_y              dw 0                   ; y velocity of player 1
+    v1_x              dw ?                    ; x velocity of player 1
+    v1_y              dw ?                    ; y velocity of player 1
 
-    p2_x              dw 533                 ; x position of player 2 (640 / 2 + 2 * (640 / 2 / 3))
-    p2_y              dw 240                 ; y position of player 2 (480 / 2)
+    p2_x              dw ?                    ; x position of player 2
+    p2_y              dw ?                    ; y position of player 2
 
-    v2_x              dw -1                  ; x velocity of player 2
-    v2_y              dw 0                   ; y velocity of player 2
+    v2_x              dw ?                    ; x velocity of player 2
+    v2_y              dw ?                    ; y velocity of player 2
+
+    ; default values for variables
+    border_x_def      dw 00h
+    border_y_def      dw 00h
+
+    p1_x_def          dw 106                  ; 640 / 2 - 2 * (640 / 2 / 3)
+    p1_y_def          dw 240                  ; 480 / 2
+
+    v1_x_def          dw 1
+    v1_y_def          dw 0
+
+    p2_x_def          dw 533                  ; 640 / 2 + 2 * (640 / 2 / 3)
+    p2_y_def          dw 240                  ; 480 / 2
+
+    v2_x_def          dw -1
+    v2_y_def          dw 0
+
+    ; player scores
+    p1_score          db 0                    ; # of wins for player1
+    p2_score          db 0                    ; # of wins for player2
+
+    ; game state flags
+    p1_won_flag       db 0
+    p2_won_flag       db 0
+
+    is_gameover_flag  db 0                    ; flag to check if game is over
+    restart_flag      db 0                    ; flag to check is players want to play again
 
     default_speed     dw 1
 
-    p1_key_pressed    db 0                   ; store ASCII code of key pressed by player 1
-    p2_key_pressed    db 0                   ; store ASCII code of key pressed by player 2
-
     player1_wins_text db "Player 1 wins$"
     player2_wins_text db "Player 2 wins$"
+    tie_text          db "Tie$"
+
+    p1_score_text     db "Player 1: $"
+    p2_score_text     db "Player 2: $"
+
+    again_text        db "Again? (y/*): $"
 data ends
 
 code segment para 'code'
                             assume CS:code, DS:data, SS:stck
+
+                            extrn  writer:near
 main proc far
     start:                  
                             push   ds
@@ -46,6 +80,7 @@ main proc far
                             pop    ax
                             pop    ax
 
+    game_setup:             
                             mov    ah, 00h                         ; set config mode to video mode
                             mov    al, 12h                         ; video mode 12 -> 640x480
                             int    10h
@@ -54,6 +89,7 @@ main proc far
                             mov    bh, 00h                         ; to bg color
                             int    10h
 
+                            call   reset_vars
                             call   draw_border
     gameloop:               
     ; handle input
@@ -76,10 +112,136 @@ main proc far
                             call   draw_player1
                             call   draw_player2
 
+    ; check if someone won
+                            call   check_game_over
+
+                            cmp    is_gameover_flag, 1             ; p1 won OR p2 won OR tie
+                            jz     gameover
+
                             jmp    gameloop
+
+    gameover:               
+                            call   display_end_screen
+                            call   ask_restart
+
+    ; check if players want to play again
+                            cmp    restart_flag, 1
+                            call   reset_vars
+                            jz     game_setup
 
                             ret
 main endp
+
+reset_vars proc near
+    ; reset border 'pointers'
+                            mov    ax, border_x_def
+                            mov    border_x, ax
+
+                            mov    ax, border_y_def
+                            mov    border_y, ax
+
+    ; reset player1 settings
+                            mov    ax, p1_x_def
+                            mov    p1_x, ax
+
+                            mov    ax, p1_y_def
+                            mov    p1_y, ax
+
+                            mov    ax, v1_x_def
+                            mov    v1_x, ax
+
+                            mov    ax, v1_y_def
+                            mov    v1_y, ax
+
+    ; reset player2 settings
+                            mov    ax, p2_x_def
+                            mov    p2_x, ax
+
+                            mov    ax, p2_y_def
+                            mov    p2_y, ax
+
+                            mov    ax, v2_x_def
+                            mov    v2_x, ax
+
+                            mov    ax, v2_y_def
+                            mov    v2_y, ax
+
+    ; reset game state flags
+                            mov    p1_won_flag, 0
+                            mov    p2_won_flag, 0
+
+                            mov    is_gameover_flag, 0
+                            mov    restart_flag, 0
+
+                            ret
+reset_vars endp
+
+ask_restart proc near
+    ; move cursor to (33, 14)
+                            mov    ah, 02h
+                            mov    bh, 0
+                            mov    dh, 14
+                            mov    dl, 33
+                            int    10h
+
+    ; print again prompt
+                            mov    ah, 09h
+                            mov    dx, offset again_text
+                            int    21h
+
+    ; ask for input
+                            xor    ax, ax
+                            mov    ah, 00h
+                            int    16h
+
+                            cmp    al, 'y'                         ; do the users want to play again?
+                            jnz    no_restart
+
+                            mov    restart_flag, 1                 ; if so, set flag
+
+    no_restart:             
+                            ret
+ask_restart endp
+
+display_end_screen proc near
+    ; move cursor to (30, 10)
+                            mov    ah, 02h
+                            mov    bh, 0
+                            mov    dh, 10
+                            mov    dl, 30
+                            int    10h
+
+    ; print player1 score text
+                            mov    ah, 09h
+                            mov    dx, offset p1_score_text
+                            int    21h
+
+    ; print player1 score
+                            mov    ah, 02h
+                            mov    bh, p1_score
+                            add    bh, '0'
+                            mov    dl, bh
+                            int    21h
+
+    ; move cursor to (30, 11)
+                            mov    ah, 02h
+                            mov    bh, 0
+                            mov    dh, 11
+                            mov    dl, 30
+                            int    10h
+
+    ; print player2 score text
+                            mov    ah, 09h
+                            mov    dx, offset p2_score_text
+                            int    21h
+
+    ; print player2 score
+                            mov    ah, 02h
+                            mov    bh, p2_score
+                            add    bh, '0'
+                            mov    dl, bh
+                            int    21h
+display_end_screen endp
 
 handle_input proc near
     ; get input asynchronously
@@ -210,8 +372,6 @@ handle_input proc near
                             mov    v2_x, ax                        ; face right
                             mov    v2_y, 0                         ; cancel y vel
 
-                            ret
-
     ignore_input2:          
                             ret
 handle_input endp
@@ -261,7 +421,7 @@ check_p1_self_collision proc near
                             ret
 
     player1_self_collided:  
-                            call   player2_won
+                            mov    p2_won_flag, 1
 
                             ret
 check_p1_self_collision endp
@@ -279,7 +439,7 @@ check_p2_self_collision proc near
                             ret
 
     player2_self_collided:  
-                            call   player1_won
+                            mov    p1_won_flag, 1
 
                             ret
 check_p2_self_collision endp
@@ -297,7 +457,7 @@ check_p1_collision proc near
                             ret
 
     player1_collided:       
-                            call   player2_won
+                            mov    p2_won_flag, 1                  ; player 2 won
 
                             ret
 check_p1_collision endp
@@ -315,7 +475,7 @@ check_p2_collision proc near
                             ret
 
     player2_collided:       
-                            call   player1_won
+                            mov    p1_won_flag, 1                  ; player 1 won
 
                             ret
 check_p2_collision endp
@@ -340,7 +500,7 @@ check_p1_oob proc near
                             ret                                    ; player1 is not out of bounds
 
     player1_oob:            
-                            call   player2_won
+                            mov    p2_won_flag, 1                  ; player 2 won
 
                             ret
 check_p1_oob endp
@@ -365,47 +525,73 @@ check_p2_oob proc near
                             ret                                    ; player2 is not out of bounds
 
     player2_oob:            
-                            call   player1_won
+                            mov    p1_won_flag, 1                  ; player 1 won
 
                             ret
 check_p2_oob endp
 
-player1_won proc near
-                            call   game_over
+check_game_over proc near
+                            mov    is_gameover_flag, 1             ; set it to true originally
+    ; states: nothing, p1 won, p2 won, tie
+                            mov    ah, p1_won_flag
+                            and    ah, p2_won_flag                 ; tie
+                            jnz    tie
 
-    ; print player1 win text
+                            cmp    p1_won_flag, 1                  ; p1 won
+                            jz     player1_won
+
+                            cmp    p2_won_flag, 1                  ; p2 won
+                            jz     player2_won
+
+                            mov    is_gameover_flag, 0             ; the game is not over
+                            ret                                    ; nothing
+
+    tie:                    
+                            call   change_to_text_mode
+
+                            mov    ah, 09h
+                            mov    dx, offset tie_text
+                            int    21h
+
+                            ret
+
+    player1_won:            
+                            call   change_to_text_mode
+
                             mov    ah, 09h
                             mov    dx, offset player1_wins_text
                             int    21h
 
+                            inc    p1_score
+
                             ret
-player1_won endp
 
-player2_won proc near
-                            call   game_over
+    player2_won:            
+                            call   change_to_text_mode
 
-    ; print player2 win text
                             mov    ah, 09h
                             mov    dx, offset player2_wins_text
                             int    21h
 
-                            ret
-player2_won endp
+                            inc    p2_score
 
-game_over proc near
+                            ret
+check_game_over endp
+
+change_to_text_mode proc near
     ; change back to text mode
                             mov    ax, 03h
                             int    10h
 
-    ; move cursor to center of the screen
+    ; move cursor to (35, 8)
                             mov    ah, 02h
                             mov    bh, 0
-                            mov    dh, 12
+                            mov    dh, 8
                             mov    dl, 35
                             int    10h
 
                             ret
-game_over endp
+change_to_text_mode endp
 
 draw_border proc near
     ; (0, 0) -> (max_width, 0)
