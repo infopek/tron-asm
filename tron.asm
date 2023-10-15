@@ -53,8 +53,8 @@ data segment para 'data'
 	; game state
 	countdown_secs      db ?
 
-	p1_won_flag         db 0
-	p2_won_flag         db 0
+	p1_won_flag         dw 0
+	p2_won_flag         dw 0
 
 	is_gameover_flag    db 0                     	; flag to check if game is over
 	restart_flag        db 0                     	; flag to check is players want to play again
@@ -87,11 +87,8 @@ main proc far
 
 	game_setup:             
 	                        call   clear_screen
-
 	                        call   reset_vars
-
-	                        call   countdown                   	; countdown for players to get ready
-
+	;call   countdown                   	; countdown for players to get ready
 	                        call   clear_screen
 
 	                        xor    bx, bx
@@ -126,8 +123,15 @@ main proc far
 	                        call   move_player2
 
 	; draw players
-	                        call   draw_player1
-	                        call   draw_player2
+	                        push   p1_x
+	                        push   p1_y
+	                        push   0ah
+	                        call   draw_player
+
+	                        push   p2_x
+	                        push   p2_y
+	                        push   0dh
+	                        call   draw_player
 
 	; check if someone won
 	                        call   check_game_over
@@ -269,12 +273,9 @@ reset_vars proc near
 reset_vars endp
 
 ask_restart proc near
-	; move cursor to (33, 14)
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, 14
-	                        mov    dl, 33
-	                        int    10h
+	                        push   14
+	                        push   33
+	                        call   move_cursor
 
 	; print again? prompt
 	                        mov    ah, 09h
@@ -282,12 +283,9 @@ ask_restart proc near
 	                        int    21h
 
 	ask_restart_input:      
-	; move cursor to (47, 14)
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, 14
-	                        mov    dl, 47
-	                        int    10h
+	                        push   14
+	                        push   47
+	                        call   move_cursor
 
 	; print input
 	                        mov    ah, 00h
@@ -313,12 +311,9 @@ ask_restart proc near
 	                        ret
 
 	no_restart:             
-	; move cursor to (30, 17)
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, 17
-	                        mov    dl, 30
-	                        int    10h
+	                        push   17
+	                        push   30
+	                        call   move_cursor
 
 	; print game over text
 	                        mov    ah, 09h
@@ -329,12 +324,9 @@ ask_restart proc near
 ask_restart endp
 
 print_scores proc near
-	; move cursor to (30, 10)
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, 10
-	                        mov    dl, 30
-	                        int    10h
+	                        push   10
+	                        push   30
+	                        call   move_cursor
 
 	; print player1 score text
 	                        mov    ah, 09h
@@ -348,12 +340,9 @@ print_scores proc near
 	                        mov    dl, bh
 	                        int    21h
 
-	; move cursor to (30, 11)
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, 11
-	                        mov    dl, 30
-	                        int    10h
+	                        push   11
+	                        push   30
+	                        call   move_cursor
 
 	; print player2 score text
 	                        mov    ah, 09h
@@ -533,6 +522,7 @@ move_player2 proc near
 	                        ret
 move_player2 endp
 
+	; procedure to check if player1 collided with themselves
 check_p1_self_collision proc near
 	; check color of pixel at (p1_x, p1_y)
 	                        mov    ah, 0dh
@@ -546,13 +536,14 @@ check_p1_self_collision proc near
 	                        ret
 
 	player1_self_collided:  
-	                        mov    p2_won_flag, 1
+	                        mov    p1_won_flag, 1
 
 	                        ret
 check_p1_self_collision endp
 
+	; procedure to check if player2 collided with themselves
 check_p2_self_collision proc near
-	; check color of pixel at (p1_x, p1_y)
+	; check color of pixel at (p2_x, p2_y)
 	                        mov    ah, 0dh
 	                        mov    bh, 0
 	                        mov    cx, [p2_x]
@@ -569,6 +560,7 @@ check_p2_self_collision proc near
 	                        ret
 check_p2_self_collision endp
 
+	; procedure to check if player1 collided with player2
 check_p1_collision proc near
 	; check color of pixel at (p1_x, p1_y)
 	                        mov    ah, 0dh
@@ -587,6 +579,7 @@ check_p1_collision proc near
 	                        ret
 check_p1_collision endp
 
+	; procedure to check if player2 collided with player1
 check_p2_collision proc near
 	; check color of pixel at (p2_x, p2_y)
 	                        mov    ah, 0dh
@@ -605,6 +598,7 @@ check_p2_collision proc near
 	                        ret
 check_p2_collision endp
 
+	; procedure to check if player1 went out of bounds
 check_p1_oob proc near
 	; check player1_x
 	                        cmp    p1_x, 00h                   	; if player1_x < 0 -> player2 wins
@@ -630,6 +624,7 @@ check_p1_oob proc near
 	                        ret
 check_p1_oob endp
 
+	; procedure to check if player2 went out of bounds
 check_p2_oob proc near
 	; check player2_x
 	                        cmp    p2_x, 00h                   	; if player2_x < 0 -> player1 wins
@@ -658,8 +653,8 @@ check_p2_oob endp
 check_game_over proc near
 	                        mov    is_gameover_flag, 1         	; set it to true originally
 	; states: nothing, p1 won, p2 won, tie
-	                        mov    ah, p1_won_flag
-	                        and    ah, p2_won_flag             	; tie
+	                        mov    ax, p1_won_flag
+	                        and    ax, p2_won_flag             	; tie
 	                        jnz    tie
 
 	                        cmp    p1_won_flag, 1              	; p1 won
@@ -708,12 +703,9 @@ change_to_text_mode proc near
 	                        mov    ax, 03h
 	                        int    10h
 
-	; move cursor to (35, 8)
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, 8
-	                        mov    dl, 35
-	                        int    10h
+	                        push   8
+	                        push   35
+	                        call   move_cursor
 
 	                        ret
 change_to_text_mode endp
@@ -791,27 +783,35 @@ draw_border proc near
 	                        ret
 draw_border endp
 
-draw_player1 proc near
+draw_player proc near
+	                        push   bp
+	                        mov    bp, sp
+
 	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 0ah                     	; green color
+	                        mov    al, [bp + 4]                	; green color
 	                        mov    bh, 00h                     	; set page number
-	                        mov    cx, p1_x                    	; set col (x)
-	                        mov    dx, p1_y                    	; set row (y)
+	                        mov    cx, [bp + 8]                	; set col (x)
+	                        mov    dx, [bp + 6]                	; set row (y)
 	                        int    10h
 
-	                        ret
-draw_player1 endp
+	                        pop    bp
+	                        ret    6
+draw_player endp
 
-draw_player2 proc near
-	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 0dh                     	; purple color
-	                        mov    bh, 00h                     	; set page number
-	                        mov    cx, p2_x                    	; set col (x)
-	                        mov    dx, p2_y                    	; set row (y)
+	; moves the cursor to (x = arg2, y = arg1)
+move_cursor proc near
+	                        push   bp
+	                        mov    bp, sp
+
+	                        mov    ah, 02h
+	                        mov    bh, 0
+	                        mov    dh, [bp + 6]                	; row
+	                        mov    dl, [bp + 4]                	; col
 	                        int    10h
 
-	                        ret
-draw_player2 endp
+	                        pop    bp
+	                        ret    4
+move_cursor endp
 
 code ends
 
