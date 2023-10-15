@@ -4,66 +4,71 @@ stck ends
 
 data segment para 'data'
 	; game & window-related
-	prev_time         db 0                     	; to check if time has elapsed
+	prev_time           db 0                     	; to check if time has elapsed
+	prev_time_countdown db 0                     	; to check if time has elapsed
 
-	max_width         dw 320
-	max_height        dw 200
+	max_width           dw 320
+	max_height          dw 200
 
-	border_x          dw ?                     	; helper var to draw border (x pos of pointer)
-	border_y          dw ?                     	; helper var to draw border (y pos of pointer)
+	border_x            dw ?                     	; helper var to draw border (x pos of pointer)
+	border_y            dw ?                     	; helper var to draw border (y pos of pointer)
 
 	; player-related
-	p1_x              dw ?                     	; x position of player 1
-	p1_y              dw ?                     	; y position of player 1
+	p1_x                dw ?                     	; x position of player 1
+	p1_y                dw ?                     	; y position of player 1
 
-	v1_x              dw ?                     	; x velocity of player 1
-	v1_y              dw ?                     	; y velocity of player 1
+	v1_x                dw ?                     	; x velocity of player 1
+	v1_y                dw ?                     	; y velocity of player 1
 
-	p2_x              dw ?                     	; x position of player 2
-	p2_y              dw ?                     	; y position of player 2
+	p2_x                dw ?                     	; x position of player 2
+	p2_y                dw ?                     	; y position of player 2
 
-	v2_x              dw ?                     	; x velocity of player 2
-	v2_y              dw ?                     	; y velocity of player 2
+	v2_x                dw ?                     	; x velocity of player 2
+	v2_y                dw ?                     	; y velocity of player 2
 
 	; default values for variables
-	border_x_def      dw 00h
-	border_y_def      dw 00h
+	countdown_secs_def  db 3
 
-	p1_x_def          dw ?
-	p1_y_def          dw ?
+	default_speed       dw 1
 
-	v1_x_def          dw 1
-	v1_y_def          dw 0
+	border_x_def        dw 00h
+	border_y_def        dw 00h
 
-	p2_x_def          dw ?
-	p2_y_def          dw ?
+	p1_x_def            dw ?
+	p1_y_def            dw ?
 
-	v2_x_def          dw -1
-	v2_y_def          dw 0
+	v1_x_def            dw 1
+	v1_y_def            dw 0
+
+	p2_x_def            dw ?
+	p2_y_def            dw ?
+
+	v2_x_def            dw -1
+	v2_y_def            dw 0
 
 	; player scores
-	p1_score          db 0                     	; # of wins for player1
-	p2_score          db 0                     	; # of wins for player2
+	p1_score            db 0                     	; # of wins for player1
+	p2_score            db 0                     	; # of wins for player2
 
-	; game state flags
-	p1_won_flag       db 0
-	p2_won_flag       db 0
+	; game state
+	countdown_secs      db ?
 
-	is_gameover_flag  db 0                     	; flag to check if game is over
-	restart_flag      db 0                     	; flag to check is players want to play again
+	p1_won_flag         db 0
+	p2_won_flag         db 0
 
-	default_speed     dw 1
+	is_gameover_flag    db 0                     	; flag to check if game is over
+	restart_flag        db 0                     	; flag to check is players want to play again
 
-	player1_wins_text db "Player 1 wins$"
-	player2_wins_text db "Player 2 wins$"
-	tie_text          db "Tie$"
+	player1_wins_text   db "Player 1 wins$"
+	player2_wins_text   db "Player 2 wins$"
+	tie_text            db "Tie$"
 
-	p1_score_text     db "Player 1: $"
-	p2_score_text     db "Player 2: $"
+	p1_score_text       db "Player 1: $"
+	p2_score_text       db "Player 2: $"
 
-	again_text        db "Again? (y/n): $"
+	again_text          db "Again? (y/n): $"
 
-	gameover_text     db "Thanks for playing!$"
+	gameover_text       db "Thanks for playing!$"
 data ends
 
 code segment para 'code'
@@ -81,7 +86,13 @@ main proc far
 	                        pop    ax
 
 	game_setup:             
-	                        mov    restart_flag, 0
+	                        call   clear_screen
+
+	                        call   reset_vars
+
+	                        call   countdown                   	; countdown for players to get ready
+
+	                        call   clear_screen
 
 	                        xor    bx, bx
 	                        mov    ah, 00h                     	; set config mode to video mode
@@ -128,7 +139,6 @@ main proc far
 
 	gameover:               
 	                        call   print_scores
-	                        call   reset_vars
 	                        call   ask_restart
 
 	; check if players want to play again
@@ -140,6 +150,49 @@ main proc far
 
 	                        ret
 main endp
+
+clear_screen proc near
+	                        mov    ax, 03h
+	                        int    10h
+
+	                        ret
+clear_screen endp
+
+countdown proc near
+	second_loop:            
+	; handle input
+	                        mov    ah, 2ch                     	; get system time
+	                        int    21h                         	; ch = hour, cl = minute, dh = second, dl = 1/100 seconds
+
+	                        cmp    dh, prev_time_countdown     	; is curr time = prev time?
+	                        je     second_loop                 	; if same, check again
+
+	; time elapsed -> continue
+	                        mov    prev_time_countdown, dh     	; prev_time = curr_time
+
+	; set cursor to center of screen
+	                        mov    ah, 02h
+	                        mov    bh, 0
+	                        mov    dh, 12
+	                        mov    dl, 40
+	                        int    10h
+
+	; print timer
+	                        mov    ah, 02h
+	                        mov    dl, countdown_secs
+	                        add    dl, '0'
+	                        int    21h
+
+	                        dec    countdown_secs
+
+	                        cmp    countdown_secs, 0
+	                        jl     start_game
+
+	                        jmp    second_loop
+
+	start_game:             
+	                        ret
+countdown endp
 
 	; procedure to calculate starting position of players
 calc_start_pos proc near
@@ -202,11 +255,15 @@ reset_vars proc near
 	                        mov    ax, v2_y_def
 	                        mov    v2_y, ax
 
-	; reset game state flags
+	; reset game state
+	                        mov    ah, countdown_secs_def
+	                        mov    countdown_secs, ah
+
 	                        mov    p1_won_flag, 0
 	                        mov    p2_won_flag, 0
 
 	                        mov    is_gameover_flag, 0
+	                        mov    restart_flag, 0
 
 	                        ret
 reset_vars endp
@@ -256,8 +313,6 @@ ask_restart proc near
 	                        ret
 
 	no_restart:             
-	                        mov    restart_flag, 0
-
 	; move cursor to (30, 17)
 	                        mov    ah, 02h
 	                        mov    bh, 0
