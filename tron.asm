@@ -59,6 +59,11 @@ data segment para 'data'
 	is_gameover_flag    db 0                     	; flag to check if game is over
 	restart_flag        db 0                     	; flag to check is players want to play again
 
+	; colors
+	green               db 0ah
+	purple              db 0dh
+	red                 db 04h
+
 	player1_wins_text   db "Player 1 wins$"
 	player2_wins_text   db "Player 2 wins$"
 	tie_text            db "Tie$"
@@ -540,7 +545,7 @@ check_p1_self_collision proc near
 	                        mov    cx, [p1_x]
 	                        mov    dx, [p1_y]
 	                        int    10h                         	; al = color
-	                        cmp    al, 0ah                     	; if color = green
+	                        cmp    al, green                   	; if color = green
 	                        jz     player1_self_collided
 
 	                        ret
@@ -558,7 +563,7 @@ check_p2_self_collision proc near
 	                        mov    cx, [p2_x]
 	                        mov    dx, [p2_y]
 	                        int    10h                         	; al = color
-	                        cmp    al, 0dh                     	; if color = purple
+	                        cmp    al, purple                  	; if color = purple
 	                        jz     player2_self_collided
 
 	                        ret
@@ -576,7 +581,7 @@ check_p1_collision proc near
 	                        mov    cx, [p1_x]
 	                        mov    dx, [p1_y]
 	                        int    10h                         	; al = color
-	                        cmp    al, 0dh                     	; if color = purple
+	                        cmp    al, purple                  	; if color = purple
 	                        jz     player1_collided
 
 	                        ret
@@ -594,7 +599,7 @@ check_p2_collision proc near
 	                        mov    cx, [p2_x]
 	                        mov    dx, [p2_y]
 	                        int    10h                         	; al = color
-	                        cmp    al,0ah                      	; if color = red
+	                        cmp    al, green                   	; if color = green
 	                        jz     player2_collided
 
 	                        ret
@@ -722,7 +727,7 @@ draw_border proc near
 	; (0, 0) -> (max_width, 0)
 	draw_top:               
 	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 04h                     	; red color
+	                        mov    al, red                     	; red color
 	                        mov    bh, 00h                     	; set page number
 	                        mov    cx, border_x                	; set col (x)
 	                        mov    dx, border_y                	; set row (y)
@@ -741,7 +746,7 @@ draw_border proc near
 	; (0, max_height) -> (max_width, max_height)
 	draw_bottom:            
 	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 04h                     	; red color
+	                        mov    al, red                     	; red color
 	                        mov    bh, 00h                     	; set page number
 	                        mov    cx, border_x                	; set col (x)
 	                        mov    dx, border_y                	; set row (y)
@@ -758,7 +763,7 @@ draw_border proc near
 	; (0, 0) -> (0, max_height)
 	draw_left:              
 	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 04h                     	; red color
+	                        mov    al, red                     	; red color
 	                        mov    bh, 00h                     	; set page number
 	                        mov    cx, border_x                	; set col (x)
 	                        mov    dx, border_y                	; set row (y)
@@ -777,7 +782,7 @@ draw_border proc near
 	; (max_width, 0) -> (max_width, max_height)
 	draw_right:             
 	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 04h                     	; red color
+	                        mov    al, red                     	; red color
 	                        mov    bh, 00h                     	; set page number
 	                        mov    cx, border_x                	; set col (x)
 	                        mov    dx, border_y                	; set row (y)
@@ -793,7 +798,7 @@ draw_border endp
 
 draw_player1 proc near
 	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 0ah                     	; green color
+	                        mov    al, green                   	; green color
 	                        mov    bh, 00h                     	; set page number
 	                        mov    cx, p1_x                    	; set col (x)
 	                        mov    dx, p1_y                    	; set row (y)
@@ -804,7 +809,7 @@ draw_player1 endp
 
 draw_player2 proc near
 	                        mov    ah, 0ch                     	; set config to draw pixel
-	                        mov    al, 0dh                     	; purple color
+	                        mov    al, purple                  	; purple color
 	                        mov    bh, 00h                     	; set page number
 	                        mov    cx, p2_x                    	; set col (x)
 	                        mov    dx, p2_y                    	; set row (y)
