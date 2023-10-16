@@ -27,7 +27,7 @@ data segment para 'data'
 	v2_y                dw ?                     	; y velocity of player 2
 
 	; default values for variables
-	countdown_secs_def  db 1
+	countdown_secs_def  db 3
 
 	default_speed       dw 1
 
@@ -37,13 +37,13 @@ data segment para 'data'
 	p1_x_def            dw ?
 	p1_y_def            dw ?
 
-	v1_x_def            dw 1
+	v1_x_def            dw ?
 	v1_y_def            dw 0
 
 	p2_x_def            dw ?
 	p2_y_def            dw ?
 
-	v2_x_def            dw -1
+	v2_x_def            dw ?
 	v2_y_def            dw 0
 
 	; player scores
@@ -111,7 +111,7 @@ main proc far
 
 	                        xor    bx, bx
 	                        mov    ah, 00h                  	; set config mode to video mode
-	                        mov    al, 13h                  	; video mode 12 -> 640x480 (16 colors)
+	                        mov    al, 13h                  	; video mode 13 -> 320x200 (256 colors)
 	                        int    10h
 
 	                        mov    ah, 0bh                  	; set config
@@ -269,6 +269,13 @@ reset_vars proc near
 	                        mov    border_y, ax
 
 	; reset player1 settings
+	                        mov    ax, default_speed
+	                        mov    v1_x_def, ax
+
+	                        mov    ax, default_speed
+	                        neg    ax
+	                        mov    v2_x_def, ax
+
 	                        mov    ax, p1_x_def
 	                        mov    p1_x, ax
 
@@ -553,7 +560,7 @@ move_player2 proc near
 	                        add    p2_y, ax                 	; new_y = old_y + vel_y
 
 	                        call   check_p2_oob             	; are we out of bounds?
-	                        call   check_p2_collision       	; did we hit player2's trail?
+	                        call   check_p2_collision       	; did we hit player1's trail?
 	                        call   check_p2_self_collision  	; did we hit our own trail?
 
 	                        ret
@@ -564,7 +571,7 @@ check_p1_self_collision proc near
 	                        push   p1_x
 	                        call   get_pixel_color
 							
-	                        cmp    al, p1_trail_color       	; if color = green
+	                        cmp    al, p1_trail_color       	; if color = p1_trail_color
 	                        jz     player1_self_collided
 
 	                        ret
@@ -586,7 +593,7 @@ check_p2_self_collision proc near
 	                        ret
 
 	player2_self_collided:  
-	                        mov    p1_won_flag, 1
+	                        mov    p1_won_flag, 1           	; player1 won
 
 	                        ret
 check_p2_self_collision endp
@@ -610,7 +617,7 @@ check_p1_collision endp
 check_p2_collision proc near
 	                        push   p2_y
 	                        push   p2_x
-	                        call   get_pixel_color          	; al = color
+	                        call   get_pixel_color
 
 	                        cmp    al, p1_trail_color       	; if color = p1_trail_color
 	                        jz     player2_collided
@@ -690,6 +697,7 @@ check_game_over proc near
 	                        ret                             	; nothing
 
 	tie:                    
+	; display tie text, no scores affected
 	                        call   change_to_text_mode
 
 	                        mov    ah, 09h
@@ -701,6 +709,7 @@ check_game_over proc near
 	player1_won:            
 	                        call   change_to_text_mode
 
+	; display player1 win text, and increase their score
 	                        mov    ah, 09h
 	                        lea    dx, player1_wins_text
 	                        int    21h
@@ -712,6 +721,7 @@ check_game_over proc near
 	player2_won:            
 	                        call   change_to_text_mode
 
+	; display player2 win text, and increase their score
 	                        mov    ah, 09h
 	                        lea    dx, player2_wins_text
 	                        int    21h
@@ -722,7 +732,6 @@ check_game_over proc near
 check_game_over endp
 
 change_to_text_mode proc near
-	; change back to text mode
 	                        mov    ax, 03h
 	                        int    10h
 
@@ -857,11 +866,11 @@ get_pixel_color proc near
 	                        push   bp
 	                        mov    bp, sp
 
-	                        mov    ah, 0dh
-	                        mov    bh, 0
-	                        mov    cx, [[bp + 4]]
-	                        mov    dx, [[bp + 6]]
-	                        int    10h
+	                        mov    ah, 0dh                  	; set config to get pixel
+	                        mov    bh, 0                    	; page number
+	                        mov    cx, [[bp + 4]]           	; row
+	                        mov    dx, [[bp + 6]]           	; col
+	                        int    10h                      	; al = result
 
 	                        pop    bp
 	                        ret    4
