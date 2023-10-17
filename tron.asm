@@ -2,38 +2,42 @@ stck segment para 'stack'
 
 stck ends
 
-; TODO: add tie flag
 data segment para 'data'
-	; game & window-related
-	prev_time           db 0                     	; to check if time has elapsed
-	prev_time_countdown db 0                     	; to check if time has elapsed
+	; main menu
+	curr_option         db ?                                                                  	; current option selected by user
+	chosen_option       db ?                                                                  	; chosen option by user
+	has_chosen_flag     db 0
 
+	; window
 	max_width           dw 320
 	max_height          dw 200
 
-	border_x            dw ?                     	; helper var to draw border (x pos of pointer)
-	border_y            dw ?                     	; helper var to draw border (y pos of pointer)
+	border_x            dw ?                                                                  	; helper var to draw border (x pos of pointer)
+	border_y            dw ?                                                                  	; helper var to draw border (y pos of pointer)
 
-	; player-related
-	p1_x                dw ?                     	; x position of player 1
-	p1_y                dw ?                     	; y position of player 1
+	; player
+	p1_x                dw ?                                                                  	; x position of player 1
+	p1_y                dw ?                                                                  	; y position of player 1
 
-	v1_x                dw ?                     	; x velocity of player 1
-	v1_y                dw ?                     	; y velocity of player 1
+	v1_x                dw ?                                                                  	; x velocity of player 1
+	v1_y                dw ?                                                                  	; y velocity of player 1
 
-	p2_x                dw ?                     	; x position of player 2
-	p2_y                dw ?                     	; y position of player 2
+	p2_x                dw ?                                                                  	; x position of player 2
+	p2_y                dw ?                                                                  	; y position of player 2
 
-	v2_x                dw ?                     	; x velocity of player 2
-	v2_y                dw ?                     	; y velocity of player 2
+	v2_x                dw ?                                                                  	; x velocity of player 2
+	v2_y                dw ?                                                                  	; y velocity of player 2
 
 	; default values for variables
+	curr_option_def     db 0
+	chosen_option_def   db 0
+
 	countdown_secs_def  db 3
 
 	default_speed       dw 1
 
-	border_x_def        dw 00h
-	border_y_def        dw 00h
+	border_x_def        dw 0
+	border_y_def        dw 0
 
 	p1_x_def            dw ?
 	p1_y_def            dw ?
@@ -48,19 +52,22 @@ data segment para 'data'
 	v2_y_def            dw 0
 
 	; player scores
-	p1_score            db 0                     	; # of wins for player1
-	p2_score            db 0                     	; # of wins for player2
+	p1_score            db 0                                                                  	; # of wins for player1
+	p2_score            db 0                                                                  	; # of wins for player2
 
 	; game state
+	prev_time           db 0                                                                  	; to check if time has elapsed
+	prev_time_countdown db 0                                                                  	; to check if time has elapsed
+
 	countdown_secs      db ?
 
 	p1_won_flag         db 0
 	p2_won_flag         db 0
 
-	is_gameover_flag    db 0                     	; flag to check if game is over
-	restart_flag        db 0                     	; flag to check is players want to play again
+	is_gameover_flag    db 0                                                                  	; flag to check if game is over
+	restart_flag        db 0                                                                  	; flag to check is players want to play again
 
-	; colors
+	; colors (from VGA 256-color palette)
 	red                 db 28h
 	green               db 0ah
 	blue                db 37h
@@ -75,9 +82,19 @@ data segment para 'data'
 
 	border_color        db ?
 
-	player1_wins_text   db "Player 1 wins$"
-	player2_wins_text   db "Player 2 wins$"
-	tie_text            db "Tie$"
+	; strings
+	welcome_text        db "*****  Welcome to Tron!  *****$"
+	play_game_text      db "[ Play Game ]$"
+	show_controls_text  db "[ Show Controls ]$"
+
+	pointer_symbol      db ">$"
+	empty_space         db " $"
+
+	selection_help_text db "Press [T] to cycle up, [G] to cycle down, [K] to choose selected$"
+
+	player1_wins_text   db "Player 1 wins!$"
+	player2_wins_text   db "Player 2 wins!$"
+	tie_text            db "Tie!$"
 
 	p1_score_text       db "Player 1: $"
 	p2_score_text       db "Player 2: $"
@@ -88,756 +105,899 @@ data segment para 'data'
 data ends
 
 code segment para 'code'
-	                        assume CS:code, DS:data, SS:stck
+	                      assume CS:code, DS:data, SS:stck
 main proc far
-	start:                  
-	                        push   ds
-	                        xor    ax, ax                   	; clean ax
+	start:                
+	                      push   ds
+	                      xor    ax, ax                    	; clean ax
 
-	                        push   ax
-	                        mov    ax, data                 	; save data segment on ax
-	                        mov    ds, ax                   	; save ax register to ds
+	                      push   ax
+	                      mov    ax, data                  	; save data segment on ax
+	                      mov    ds, ax                    	; save ax register to ds
 
-	                        pop    ax
-	                        pop    ax
+	                      pop    ax
 
-	game_setup:             
-	                        call   clear_screen
+	                      call   clear_screen
 
-	                        call   set_colors
-	                        call   reset_vars
-	                        call   countdown                	; countdown for players to get ready
+	                      call   main_menu                 	; display main menu
+	                      call   evaluate_option           	; decide where to go with selected option
 
-	                        call   clear_screen
+	game_setup:           
+	                      call   clear_screen
+						
+	; decided to move this out because I didn't want to initialize every var for a countdown
+	                      mov    ah, countdown_secs_def
+	                      mov    countdown_secs, ah
+	                      call   countdown                 	; countdown for players to get ready
 
-	                        mov    ah, 00h                  	; set config mode to video mode
-	                        mov    al, 13h                  	; video mode 13 -> 320x200 (256 colors)
-	                        int    10h
+	                      call   clear_screen
 
-	                        mov    ah, 0bh                  	; set config
-	                        mov    bh, 00h                  	; to bg color
-	                        int    10h
+	                      mov    ah, 00h                   	; set config mode to video mode
+	                      mov    al, 13h                   	; video mode 13 -> 320x200 (256 colors)
+	                      int    10h
 
-	                        call   calc_start_pos           	; from video mode resolution
+	                      mov    ah, 0bh                   	; set config
+	                      mov    bh, 00h                   	; to bg color
+	                      int    10h
 
-	                        call   reset_vars
-	                        call   draw_border
-	gameloop:               
+	                      call   calc_start_pos            	; from video mode resolution
+	                      call   reset_game_state
+	                      call   set_colors
+	                      call   draw_border
+	gameloop:             
 	; handle input
-	                        call   handle_input
+	                      call   handle_input
                             
 	; timing
-	                        mov    ah, 2ch                  	; get system time
-	                        int    21h                      	; ch = hour, cl = minute, dh = second, dl = 1/100 seconds
+	                      mov    ah, 2ch                   	; get system time
+	                      int    21h                       	; ch = hour, cl = minute, dh = second, dl = 1/100 seconds
 
-	                        cmp    dl, prev_time            	; is curr time = prev time?
-	                        je     gameloop                 	; if same, check again
+	                      cmp    dl, prev_time             	; is curr time = prev time?
+	                      je     gameloop                  	; if same, check again
 
 	; time elapsed -> continue
-	                        mov    prev_time, dl            	; prev_time = curr_time
+	                      mov    prev_time, dl             	; prev_time = curr_time
 
-	; draw trail
-	                        call   draw_player1_trail
-	                        call   draw_player2_trail
+	; draw trails
+	                      call   draw_player1_trail
+	                      call   draw_player2_trail
 
 	; update players
-	                        call   move_player1
-	                        call   move_player2
+	                      call   move_player1
+	                      call   move_player2
 
-	; draw head
-	                        call   draw_player1_head
-	                        call   draw_player2_head
+	; draw heads
+	                      call   draw_player1_head
+	                      call   draw_player2_head
 
 	; check if someone won
-	                        call   check_game_over
+	                      call   evaluate_game_state
 
-	                        cmp    is_gameover_flag, 1      	; p1 won OR p2 won OR tie
-	                        jz     gameover
+	                      cmp    is_gameover_flag, 1       	; p1 won OR p2 won OR tie
+	                      jz     gameover
 
-	                        jmp    gameloop
+	                      jmp    gameloop
 
-	gameover:               
-	                        call   print_scores
-	                        call   ask_restart
+	gameover:             
+	                      call   print_scores
+	                      call   ask_restart
 
 	; check if players want to play again
-	                        cmp    restart_flag, 1
-	                        jz     game_setup
+	                      cmp    restart_flag, 1
+	                      jz     game_setup
 
-	                        mov    ax, 4c00h
-	                        int    21h
+	                      mov    ax, 4c00h
+	                      int    21h
 
-	                        ret
+	                      ret
 main endp
 
-; TODO: move to utils
-clear_screen proc near
-	                        mov    ax, 03h
-	                        int    10h
+evaluate_option proc near
 
-	                        ret
-clear_screen endp
+
+	                      ret
+evaluate_option endp
+
+	; display main menu and polls options, exists when one is chosen
+main_menu proc near
+	; TODO: calculate relative positions: max_width / 2 - string_len / 2 (for options as well)
+	; so that two pointer arrows can be displayed cleanly
+	                      push   25
+	                      push   4
+	                      call   move_cursor
+
+	; print welcome text
+	                      push   offset welcome_text
+	                      call   print_string
+
+	                      call   display_options
+
+	                      call   display_options_guide     	; help for the user
+
+	; init default chosen option
+	                      mov    ah, chosen_option_def
+	                      mov    chosen_option, ah
+	                      call   display_option
+
+	; loop until an option is chosen
+	poll_options:         
+	                      call   cycle_options
+
+	                      cmp    has_chosen_flag, 1        	; have they chosen yet?
+	                      jz     exit_main_menu
+
+	                      jmp    poll_options              	; not yet
+
+	exit_main_menu:       
+	                      mov    has_chosen_flag, 0
+	                      ret
+main_menu endp
+
+	; helper proc for main menu to display the user's options
+display_options proc near
+	; option 1: play game
+	                      push   33
+	                      push   8
+	                      call   move_cursor
+
+	                      push   offset play_game_text
+	                      call   print_string
+
+	; option 2: show player controls
+	                      push   31
+	                      push   10
+	                      call   move_cursor
+
+	                      push   offset show_controls_text
+	                      call   print_string
+
+	                      ret
+display_options endp
+
+display_options_guide proc near
+	                      push   10
+	                      push   15
+	                      call   move_cursor
+
+	                      push   offset selection_help_text
+	                      call   print_string
+
+	                      ret
+display_options_guide endp
+
+	; prompts the user to choose an option in main menu
+cycle_options proc near
+	choose_option:        
+	                      mov    ah, 01h
+	                      int    16
+	                      jz     no_choice
+
+	                      mov    ah, 00h
+	                      int    16h
+	                      jmp    handle_choice
+
+	no_choice:            
+	                      ret
+
+	handle_choice:        
+	                      cmp    al, 't'
+	                      je     key_is_t
+
+	                      cmp    al, 'g'
+	                      je     key_is_g
+
+	                      cmp    al, 'k'
+	                      je     select_option
+
+	                      ret
+
+	key_is_t:             
+	                      cmp    curr_option, 0            	; check if current selected option is the first one
+	                      je     key_is_g
+
+	                      call   display_option
+
+	                      mov    curr_option, 0            	; make current selected option the first one
+
+	                      ret
+
+	key_is_g:             
+	                      cmp    curr_option, 1            	; check if current selected option is the second one
+	                      je     key_is_t
+
+	                      call   display_option
+
+	                      mov    curr_option, 1            	; make current selected option the second one
+
+	                      ret
+
+	select_option:        
+	                      mov    has_chosen_flag, 1
+
+	                      ret
+cycle_options endp
+
+display_option proc near
+	; check which option is selected
+	                      cmp    curr_option, 0
+	                      je     move_ptr_up
+
+	                      cmp    curr_option, 1
+	                      je     move_ptr_down
+
+	                      ret
+
+	move_ptr_up:          
+	; erase previous arrow
+	                      push   28
+	                      push   10
+	                      call   move_cursor
+
+	                      push   offset empty_space
+	                      call   print_string
+	; print current
+	                      push   28
+	                      push   8
+	                      call   move_cursor
+
+	                      push   offset pointer_symbol
+	                      call   print_string
+
+	                      ret
+
+	move_ptr_down:        
+	; erase previous arrow
+	                      push   28
+	                      push   8
+	                      call   move_cursor
+
+	                      push   offset empty_space
+	                      call   print_string
+
+	                      push   28
+	                      push   10
+	                      call   move_cursor
+
+	                      push   offset pointer_symbol     	; print little arrow
+	                      call   print_string
+
+	                      ret
+display_option endp
 
 countdown proc near
-	second_loop:            
+	second_loop:          
 	; handle input
-	                        mov    ah, 2ch                  	; get system time
-	                        int    21h                      	; ch = hour, cl = minute, dh = second, dl = 1/100 seconds
+	                      mov    ah, 2ch                   	; get system time
+	                      int    21h                       	; ch = hour, cl = minute, dh = second, dl = 1/100 seconds
 
-	                        cmp    dh, prev_time_countdown  	; is curr time = prev time?
-	                        je     second_loop              	; if same, check again
+	                      cmp    dh, prev_time_countdown   	; is curr time = prev time?
+	                      je     second_loop               	; if same, check again
 
 	; time elapsed -> continue
-	                        mov    prev_time_countdown, dh  	; prev_time = curr_time
+	                      mov    prev_time_countdown, dh   	; prev_time = curr_time
 
-	; set cursor to center of screen
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, 12
-	                        mov    dl, 40
-	                        int    10h
+	                      push   40
+	                      push   12
+	                      call   move_cursor
 
 	; print timer
-	                        mov    ah, 02h
-	                        mov    dl, countdown_secs
-	                        add    dl, '0'
-	                        int    21h
+	                      mov    ah, 02h
+	                      mov    dl, countdown_secs
+	                      add    dl, '0'
+	                      int    21h
 
-	                        dec    countdown_secs
+	                      dec    countdown_secs
 
-	                        cmp    countdown_secs, 0
-	                        jl     start_game
+	                      cmp    countdown_secs, 0
+	                      jl     start_game
 
-	                        jmp    second_loop
+	                      jmp    second_loop
 
-	start_game:             
-	                        ret
+	start_game:           
+	                      ret
 countdown endp
 
 	; procedure to calculate starting position of players
 calc_start_pos proc near
-	                        mov    bx, max_height
-	                        shr    bx, 1
+	                      mov    bx, max_height
+	                      shr    bx, 1                     	; bx = max_height / 2
 
-	                        mov    p1_y_def, bx             	; max_height / 2
-	                        mov    p2_y_def, bx             	; max_height / 2
+	                      mov    p1_y_def, bx              	; max_height / 2
+	                      mov    p2_y_def, bx              	; max_height / 2
 
-	                        mov    cx, max_width
-	                        shr    cx, 1
+	                      mov    ax, max_width
+	                      mov    bx, 6
+	                      cwd
+	                      div    bx                        	; ax = max_width / 6
 
-	                        mov    ax, max_width
-	                        mov    bx, 3
-	                        cwd
-	                        div    bx
+	                      mov    p1_x_def, ax              	; max_width / 2 - (2/3) * (max_width / 2) = max_width / 6
 
-	                        push   cx
-	                        sub    cx, ax
-	                        mov    p1_x_def, cx             	; max_width / 2 - (2/3) * (max_width / 2)
-
-	                        pop    cx
-	                        add    cx, ax
-	                        mov    p2_x_def, cx             	; max_width / 2 + (2/3) * (max_width / 2)
+	                      mov    bx, 5
+	                      mul    bx                        	; ax = 5 * max_width / 6
+	                      mov    p2_x_def, ax              	; max_width / 2 + (2/3) * (max_width / 2) = 5 * max_width / 6
 	                        
-	                        ret
+	                      ret
 calc_start_pos endp
 
 	; sets border color, players and their trails' colors
 set_colors proc near
-	                        mov    ah, red
-	                        mov    p1_head_color, ah
+	                      mov    ah, red
+	                      mov    p1_head_color, ah
 
-	                        mov    ah, orange
-	                        mov    p1_trail_color, ah
+	                      mov    ah, orange
+	                      mov    p1_trail_color, ah
 							
-	                        mov    ah, blue
-	                        mov    p2_head_color, ah
+	                      mov    ah, blue
+	                      mov    p2_head_color, ah
 
-	                        mov    ah, light_blue
-	                        mov    p2_trail_color, ah
+	                      mov    ah, light_blue
+	                      mov    p2_trail_color, ah
 
-	                        mov    ah, green
-	                        mov    border_color, ah
+	                      mov    ah, green
+	                      mov    border_color, ah
 
-	                        ret
+	                      ret
 set_colors endp
 
-reset_vars proc near
+reset_game_state proc near
 	; reset border 'pointers'
-	                        mov    ax, border_x_def
-	                        mov    border_x, ax
+	                      mov    ax, border_x_def
+	                      mov    border_x, ax
 
-	                        mov    ax, border_y_def
-	                        mov    border_y, ax
+	                      mov    ax, border_y_def
+	                      mov    border_y, ax
 
 	; reset player1 settings
-	                        mov    ax, default_speed
-	                        mov    v1_x_def, ax
+	                      mov    ax, default_speed
+	                      mov    v1_x_def, ax
 
-	                        mov    ax, default_speed
-	                        neg    ax
-	                        mov    v2_x_def, ax
+	                      mov    ax, default_speed
+	                      neg    ax
+	                      mov    v2_x_def, ax
 
-	                        mov    ax, p1_x_def
-	                        mov    p1_x, ax
+	                      mov    ax, p1_x_def
+	                      mov    p1_x, ax
 
-	                        mov    ax, p1_y_def
-	                        mov    p1_y, ax
+	                      mov    ax, p1_y_def
+	                      mov    p1_y, ax
 
-	                        mov    ax, v1_x_def
-	                        mov    v1_x, ax
+	                      mov    ax, v1_x_def
+	                      mov    v1_x, ax
 
-	                        mov    ax, v1_y_def
-	                        mov    v1_y, ax
+	                      mov    ax, v1_y_def
+	                      mov    v1_y, ax
 
 	; reset player2 settings
-	                        mov    ax, p2_x_def
-	                        mov    p2_x, ax
+	                      mov    ax, p2_x_def
+	                      mov    p2_x, ax
 
-	                        mov    ax, p2_y_def
-	                        mov    p2_y, ax
+	                      mov    ax, p2_y_def
+	                      mov    p2_y, ax
 
-	                        mov    ax, v2_x_def
-	                        mov    v2_x, ax
+	                      mov    ax, v2_x_def
+	                      mov    v2_x, ax
 
-	                        mov    ax, v2_y_def
-	                        mov    v2_y, ax
+	                      mov    ax, v2_y_def
+	                      mov    v2_y, ax
 
 	; reset game state
-	                        mov    ah, countdown_secs_def
-	                        mov    countdown_secs, ah
+	                      mov    p1_won_flag, 0
+	                      mov    p2_won_flag, 0
 
-	                        mov    p1_won_flag, 0
-	                        mov    p2_won_flag, 0
+	                      mov    is_gameover_flag, 0
+	                      mov    restart_flag, 0
 
-	                        mov    is_gameover_flag, 0
-	                        mov    restart_flag, 0
-
-	                        ret
-reset_vars endp
+	                      ret
+reset_game_state endp
 
 ask_restart proc near
-	                        push   33
-	                        push   14
-	                        call   move_cursor
+	                      push   33
+	                      push   14
+	                      call   move_cursor
 
-	; print again? prompt
-	                        mov    ah, 09h
-	                        mov    dx, offset again_text
-	                        int    21h
+	                      push   offset again_text
+	                      call   print_string
 
-	ask_restart_input:      
-	                        push   47
-	                        push   14
-	                        call   move_cursor
+	ask_restart_input:    
+	                      push   47
+	                      push   14
+	                      call   move_cursor
 
-	; print input
-	                        mov    ah, 00h
-	                        int    16h
+	; get input
+	                      mov    ah, 00h
+	                      int    16h
 
-	                        mov    ah, 02h
-	                        mov    dl, al
-	                        int    21h
+	; display keypress
+	                      mov    ah, 02h
+	                      mov    dl, al
+	                      int    21h
 
-	                        cmp    al, 'y'                  	; do the users want to play again?
-	                        jz     restart
+	                      cmp    al, 'y'                   	; do the users want to play again?
+	                      jz     restart
 
-	                        cmp    al, 'n'
-	                        jz     no_restart
+	                      cmp    al, 'n'
+	                      jz     no_restart
 
-	                        jmp    ask_restart_input
+	                      jmp    ask_restart_input
 
-	                        ret
+	                      ret
 
-	restart:                
-	                        mov    restart_flag, 1          	; if so, set flag
+	restart:              
+	                      mov    restart_flag, 1           	; if so, set flag
 
-	                        ret
+	                      ret
 
-	no_restart:             
-	                        push   30
-	                        push   17
-	                        call   move_cursor
+	no_restart:           
+	                      push   30
+	                      push   17
+	                      call   move_cursor
 
-	; print game over text
-	                        mov    ah, 09h
-	                        mov    dx, offset gameover_text
-	                        int    21h
+	                      push   offset gameover_text
+	                      call   print_string
 
-	                        ret
+	                      ret
 ask_restart endp
 
 print_scores proc near
-	                        push   30
-	                        push   10
-	                        call   move_cursor
+	; print player1's score
+	                      push   30
+	                      push   10
+	                      call   move_cursor
 
-	; print player1 score text
-	                        mov    ah, 09h
-	                        mov    dx, offset p1_score_text
-	                        int    21h
+	                      push   offset p1_score_text
+	                      mov    bh, p1_score              	; use upper byte to store input
+	                      push   bx
+	                      call   print_score
 
-	; print player1 score
-	                        mov    ah, 02h
-	                        mov    bh, p1_score
-	                        add    bh, '0'
-	                        mov    dl, bh
-	                        int    21h
+	; print player2's score
+	                      push   30
+	                      push   11
+	                      call   move_cursor
 
-	                        push   30
-	                        push   11
-	                        call   move_cursor
+	                      push   offset p2_score_text
+	                      mov    bh, p2_score              	; use upper byte to store input
+	                      push   bx
+	                      call   print_score
 
-	; print player2 score text
-	                        mov    ah, 09h
-	                        mov    dx, offset p2_score_text
-	                        int    21h
-
-	; print player2 score
-	                        mov    ah, 02h
-	                        mov    bh, p2_score
-	                        add    bh, '0'
-	                        mov    dl, bh
-	                        int    21h
-
-	                        ret
+	                      ret
 print_scores endp
+
+	; prints "arg1: arg2", where arg1 is a string and arg2 is a number
+print_score proc near
+	                      push   bp
+	                      mov    bp, sp
+
+	                      push   [bp + 6]
+	                      call   print_string
+
+	                      mov    ax, [bp + 4]
+	                      mov    bh, ah                    	; upper byte of contains input
+	                      add    bh, '0'                   	; c + 48
+
+	                      mov    ah, 02h                   	; print character
+	                      mov    dl, bh
+	                      int    21h
+
+	                      pop    bp
+	                      ret    4
+print_score endp
 
 handle_input proc near
 	; get input asynchronously
-	                        mov    ah, 01h
-	                        int    16h
-	                        jz     no_input
+	                      mov    ah, 01h
+	                      int    16h
+	                      jz     no_input
 
-	                        mov    ah, 00h
-	                        int    16h
-	                        jmp    check_input1
+	; refresh buffer
+	                      mov    ah, 00h
+	                      int    16h
+	                      jmp    check_input1
 
-	no_input:               
-	                        ret
+	no_input:             
+	                      ret
 
 	; check WASD keys
-	check_input1:           
-	                        cmp    al, 'w'
-	                        je     key_is_w
+	check_input1:         
+	                      cmp    al, 'w'
+	                      je     key_is_w
 
-	                        cmp    al, 'a'
-	                        je     key_is_a
+	                      cmp    al, 'a'
+	                      je     key_is_a
 
-	                        cmp    al, 's'
-	                        je     key_is_s
+	                      cmp    al, 's'
+	                      je     key_is_s
 
-	                        cmp    al, 'd'
-	                        je     key_is_d
+	                      cmp    al, 'd'
+	                      je     key_is_d
 
-	                        jmp    check_input2
+	                      jmp    check_input2
 
-	key_is_w:               
-	                        cmp    v1_y, 0                  	; W key is only valid if facing left or right
-	                        jne    ignore_input1
+	key_is_w:             
+	                      cmp    v1_y, 0                   	; W key is only valid if facing left or right
+	                      jne    ignore_input1
 
-	                        mov    ax, default_speed
-	                        neg    ax
-	                        mov    v1_y, ax                 	; face up
-	                        mov    v1_x, 0                  	; cancel x vel
+	                      mov    ax, default_speed
+	                      neg    ax
+	                      mov    v1_y, ax                  	; face up
+	                      mov    v1_x, 0                   	; cancel x vel
 
-	                        ret
+	                      ret
 
-	key_is_a:               
-	                        cmp    v1_x, 0                  	; A key is only valid if facing up or down
-	                        jne    ignore_input1
+	key_is_a:             
+	                      cmp    v1_x, 0                   	; A key is only valid if facing up or down
+	                      jne    ignore_input1
 
-	                        mov    ax, default_speed
-	                        neg    ax
-	                        mov    v1_x, ax                 	; face left
-	                        mov    v1_y, 0                  	; cancel y vel
+	                      mov    ax, default_speed
+	                      neg    ax
+	                      mov    v1_x, ax                  	; face left
+	                      mov    v1_y, 0                   	; cancel y vel
 
-	                        ret
+	                      ret
 
-	key_is_s:               
-	                        cmp    v1_y, 0                  	; S key is only valid if facing left or right
-	                        jne    ignore_input1
+	key_is_s:             
+	                      cmp    v1_y, 0                   	; S key is only valid if facing left or right
+	                      jne    ignore_input1
 
-	                        mov    ax, default_speed
-	                        mov    v1_y, ax                 	; face down
-	                        mov    v1_x, 0                  	; cancel x vel
+	                      mov    ax, default_speed
+	                      mov    v1_y, ax                  	; face down
+	                      mov    v1_x, 0                   	; cancel x vel
 
-	                        ret
+	                      ret
 
-	key_is_d:               
-	                        cmp    v1_x, 0                  	; D key is only valid if facing up or down
-	                        jne    ignore_input1
+	key_is_d:             
+	                      cmp    v1_x, 0                   	; D key is only valid if facing up or down
+	                      jne    ignore_input1
 
-	                        mov    ax, default_speed
-	                        mov    v1_x, ax                 	; face right
-	                        mov    v1_y, 0                  	; cancel y vel
+	                      mov    ax, default_speed
+	                      mov    v1_x, ax                  	; face right
+	                      mov    v1_y, 0                   	; cancel y vel
 
-	                        ret
+	                      ret
 
-	ignore_input1:          
-	                        ret
+	ignore_input1:        
+	                      ret
 
-	check_input2:           
-	                        cmp    al, 'i'
-	                        je     key_is_i
+	check_input2:         
+	                      cmp    al, 'i'
+	                      je     key_is_i
 
-	                        cmp    al, 'j'
-	                        je     key_is_j
+	                      cmp    al, 'j'
+	                      je     key_is_j
 
-	                        cmp    al, 'k'
-	                        je     key_is_k
+	                      cmp    al, 'k'
+	                      je     key_is_k
 
-	                        cmp    al, 'l'
-	                        je     key_is_l
+	                      cmp    al, 'l'
+	                      je     key_is_l
 
-	                        ret
+	                      ret
 
-	key_is_i:               
-	                        cmp    v2_y, 0                  	; I key is only valid if facing left or right
-	                        jne    ignore_input2
+	key_is_i:             
+	                      cmp    v2_y, 0                   	; I key is only valid if facing left or right
+	                      jne    ignore_input2
 
-	                        mov    ax, default_speed
-	                        neg    ax
-	                        mov    v2_y, ax                 	; face up
-	                        mov    v2_x, 0                  	; cancel x vel
+	                      mov    ax, default_speed
+	                      neg    ax
+	                      mov    v2_y, ax                  	; face up
+	                      mov    v2_x, 0                   	; cancel x vel
 
-	                        ret
+	                      ret
 
-	key_is_j:               
-	                        cmp    v2_x, 0                  	; J key is only valid if facing up or down
-	                        jne    ignore_input2
+	key_is_j:             
+	                      cmp    v2_x, 0                   	; J key is only valid if facing up or down
+	                      jne    ignore_input2
 
-	                        mov    ax, default_speed
-	                        neg    ax
-	                        mov    v2_x, ax                 	; face left
-	                        mov    v2_y, 0                  	; cancel y vel
+	                      mov    ax, default_speed
+	                      neg    ax
+	                      mov    v2_x, ax                  	; face left
+	                      mov    v2_y, 0                   	; cancel y vel
 
-	                        ret
+	                      ret
 
-	key_is_k:               
-	                        cmp    v2_y, 0                  	; K key is only valid if facing left or right
-	                        jne    ignore_input2
+	key_is_k:             
+	                      cmp    v2_y, 0                   	; K key is only valid if facing left or right
+	                      jne    ignore_input2
 
-	                        mov    ax, default_speed
-	                        mov    v2_y, ax                 	; face down
-	                        mov    v2_x, 0                  	; cancel x vel
+	                      mov    ax, default_speed
+	                      mov    v2_y, ax                  	; face down
+	                      mov    v2_x, 0                   	; cancel x vel
 
-	                        ret
+	                      ret
 
-	key_is_l:               
-	                        cmp    v2_x, 0                  	; L key is only valid if facing up or down
-	                        jne    ignore_input2
+	key_is_l:             
+	                      cmp    v2_x, 0                   	; L key is only valid if facing up or down
+	                      jne    ignore_input2
 
-	                        mov    ax, default_speed
-	                        mov    v2_x, ax                 	; face right
-	                        mov    v2_y, 0                  	; cancel y vel
+	                      mov    ax, default_speed
+	                      mov    v2_x, ax                  	; face right
+	                      mov    v2_y, 0                   	; cancel y vel
 
-	ignore_input2:          
-	                        ret
+	ignore_input2:        
+	                      ret
 handle_input endp
 
 move_player1 proc near
 	; update player1_x
-	                        mov    ax, v1_x
-	                        add    p1_x, ax                 	; new_x = old_x + vel_x
+	                      mov    ax, v1_x
+	                      add    p1_x, ax                  	; new_x = old_x + vel_x
 
 	; update player1_y
-	                        mov    ax, v1_y
-	                        add    p1_y, ax                 	; new_y = old_y + vel_y
+	                      mov    ax, v1_y
+	                      add    p1_y, ax                  	; new_y = old_y + vel_y
 
-	                        call   check_p1_oob             	; are we out of bounds?
-	                        call   check_p1_collision       	; did we hit player2's trail?
-	                        call   check_p1_self_collision  	; did we hit our own trail?
-
-	                        ret
+	                      call   check_p1_collisions
+	                      ret
 move_player1 endp
 
 move_player2 proc near
 	; update player2_x
-	                        mov    ax, v2_x
-	                        add    p2_x, ax                 	; new_x = old_x + vel_x
+	                      mov    ax, v2_x
+	                      add    p2_x, ax                  	; new_x = old_x + vel_x
 
 	; update player2_y
-	                        mov    ax, v2_y
-	                        add    p2_y, ax                 	; new_y = old_y + vel_y
+	                      mov    ax, v2_y
+	                      add    p2_y, ax                  	; new_y = old_y + vel_y
 
-	                        call   check_p2_oob             	; are we out of bounds?
-	                        call   check_p2_collision       	; did we hit player1's trail?
-	                        call   check_p2_self_collision  	; did we hit our own trail?
-
-	                        ret
+	                      call   check_p2_collisions
+	                      ret
 move_player2 endp
 
-check_p1_self_collision proc near
-	                        push   p1_y
-	                        push   p1_x
-	                        call   get_pixel_color
+check_p1_collisions proc near
+	; did we hit player2's trail?
+	                      push   p1_x
+	                      push   p1_y
+
+	                      lea    ax, word ptr p2_won_flag  	; store address of flag in ax
+	                      push   word ptr ax               	; pass by pointer
+
+	                      mov    ah, p2_trail_color
+	                      push   ax
+
+	                      call   check_collision
+
+	; are we out of bounds?
+	                      push   p1_x
+	                      push   p1_y
+
+	                      lea    ax, word ptr p2_won_flag  	; store address of flag in ax
+	                      push   word ptr ax               	; pass by pointer
+
+	                      mov    ah, border_color
+	                      push   ax
+
+	                      call   check_collision
+
+	; did we hit our own trail?
+	                      push   p1_x
+	                      push   p1_y
+
+	                      lea    ax, word ptr p2_won_flag  	; store address of flag in ax
+	                      push   word ptr ax               	; pass by pointer
+
+	                      mov    ah, p1_trail_color
+	                      push   ax
+	                      call   check_collision
+
+	                      ret
+check_p1_collisions endp
+
+check_p2_collisions proc near
+	; did we hit player1's trail?
+	                      push   p2_x
+	                      push   p2_y
+
+	                      lea    ax, word ptr p1_won_flag  	; store address of flag in ax
+	                      push   word ptr ax               	; pass by pointer
+
+	                      mov    ah, p2_trail_color
+	                      push   ax
+
+	                      call   check_collision
+
+	; are we out of bounds?
+	                      push   p2_x
+	                      push   p2_y
+
+	                      lea    ax, word ptr p1_won_flag  	; store address of flag in ax
+	                      push   word ptr ax               	; pass by pointer
+
+	                      mov    ah, border_color
+	                      push   ax
+
+	                      call   check_collision
+
+	; did we hit our own trail?
+	                      push   p2_x
+	                      push   p2_y
+
+	                      lea    ax, word ptr p1_won_flag  	; store address of flag in ax
+	                      push   word ptr ax               	; pass by pointer
+
+	                      mov    ah, p1_trail_color
+	                      push   ax
+	                      call   check_collision
+
+	                      ret
+check_p2_collisions endp
+
+	; arg1 = player_x, arg2 = player_y, arg3 = other player's won flag, arg4 = color to check against
+check_collision proc near
+	                      push   bp
+	                      mov    bp, sp
+
+	                      push   [bp + 8]                  	; p_y
+	                      push   [bp + 10]                 	; p_x
+	                      call   get_pixel_color
+
+	                      mov    bx, [bp + 4]
+	                      cmp    al, bh                    	; upper byte contains input
+	                      jz     player_collided
 							
-	                        cmp    al, p1_trail_color       	; if color = p1_trail_color
-	                        jz     player1_self_collided
+	                      pop    bp
+	                      ret    8
 
-	                        ret
+	player_collided:      
+	; set other player's won flag
+	                      mov    bx, word ptr [[bp + 6]]
+	                      mov    byte ptr [bx], 1
 
-	player1_self_collided:  
-	                        mov    p2_won_flag, 1
+	                      pop    bp
+	                      ret    8
+check_collision endp
 
-	                        ret
-check_p1_self_collision endp
-
-check_p2_self_collision proc near
-	                        push   p2_y
-	                        push   p2_x
-	                        call   get_pixel_color
-							
-	                        cmp    al, p2_trail_color       	; if color = p2_trail_color
-	                        jz     player2_self_collided
-
-	                        ret
-
-	player2_self_collided:  
-	                        mov    p1_won_flag, 1           	; player1 won
-
-	                        ret
-check_p2_self_collision endp
-
-check_p1_collision proc near
-	                        push   p1_y
-	                        push   p1_x
-	                        call   get_pixel_color
-							
-	                        cmp    al, p2_trail_color       	; if color = p2_trail_color
-	                        jz     player1_collided
-
-	                        ret
-
-	player1_collided:       
-	                        mov    p2_won_flag, 1           	; player 2 won
-
-	                        ret
-check_p1_collision endp
-
-check_p2_collision proc near
-	                        push   p2_y
-	                        push   p2_x
-	                        call   get_pixel_color
-
-	                        cmp    al, p1_trail_color       	; if color = p1_trail_color
-	                        jz     player2_collided
-
-	                        ret
-
-	player2_collided:       
-	                        mov    p1_won_flag, 1           	; player 1 won
-
-	                        ret
-check_p2_collision endp
-
-check_p1_oob proc near
-	; check player1_x
-	                        cmp    p1_x, 00h                	; if player1_x < 0 -> player2 wins
-	                        jl     player1_oob
-
-	                        mov    ax, max_width
-	                        cmp    p1_x, ax                 	; if player1_x > max_width -> player2 wins
-	                        jg     player1_oob
-
-	; check player1_y
-	                        cmp    p1_y, 00h                	; if player1_y < 0 -> player2 wins
-	                        jl     player1_oob
-
-	                        mov    ax, max_height
-	                        cmp    p1_y, ax                 	; if player1_y > max_height -> player2 wins
-	                        jg     player1_oob
-
-	                        ret                             	; player1 is not out of bounds
-
-	player1_oob:            
-	                        mov    p2_won_flag, 1           	; player 2 won
-
-	                        ret
-check_p1_oob endp
-
-check_p2_oob proc near
-	; check player2_x
-	                        cmp    p2_x, 00h                	; if player2_x < 0 -> player1 wins
-	                        jl     player2_oob
-
-	                        mov    ax, max_width
-	                        cmp    p2_x, ax                 	; if player2_x > max_width -> player1 wins
-	                        jg     player2_oob
-
-	; check player2_y
-	                        cmp    p2_y, 00h                	; if player2_y < 0 -> player1 wins
-	                        jl     player2_oob
-
-	                        mov    ax, max_height
-	                        cmp    p2_y, ax                 	; if player2_y > max_height -> player1 wins
-	                        jg     player2_oob
-
-	                        ret                             	; player2 is not out of bounds
-
-	player2_oob:            
-	                        mov    p1_won_flag, 1           	; player 1 won
-
-	                        ret
-check_p2_oob endp
-
-; TODO: this proc should only set flags, leave printing to main!
-check_game_over proc near
-	                        mov    is_gameover_flag, 1      	; set it to true originally
+evaluate_game_state proc near
+	                      mov    is_gameover_flag, 1       	; set it to true originally
 	; states: nothing, p1 won, p2 won, tie
-	                        mov    ah, p1_won_flag
-	                        and    ah, p2_won_flag          	; tie
-	                        jnz    tie
+	                      mov    ah, p1_won_flag
+	                      and    ah, p2_won_flag           	; tie
+	                      jnz    tie
 
-	                        cmp    p1_won_flag, 1           	; p1 won
-	                        jz     player1_won
+	                      cmp    p1_won_flag, 1            	; p1 won
+	                      jz     player1_won
 
-	                        cmp    p2_won_flag, 1           	; p2 won
-	                        jz     player2_won
+	                      cmp    p2_won_flag, 1            	; p2 won
+	                      jz     player2_won
 
-	                        mov    is_gameover_flag, 0      	; the game is not over
-	                        ret                             	; nothing
+	                      mov    is_gameover_flag, 0       	; the game is not over
+	                      ret                              	; nothing
 
-	tie:                    
+	tie:                  
 	; display tie text, no scores affected
-	                        call   change_to_text_mode
+	                      call   change_to_text_mode
 
-	                        mov    ah, 09h
-	                        lea    dx, tie_text
-	                        int    21h
+	                      push   offset tie_text
+	                      call   print_string
 
-	                        ret
+	                      ret
 
-	player1_won:            
-	                        call   change_to_text_mode
+	player1_won:          
+	                      call   change_to_text_mode
 
-	; display player1 win text, and increase their score
-	                        mov    ah, 09h
-	                        lea    dx, player1_wins_text
-	                        int    21h
+	                      push   offset player1_wins_text
+	                      call   print_string
 
-	                        inc    p1_score
+	                      inc    p1_score
 
-	                        ret
+	                      ret
 
-	player2_won:            
-	                        call   change_to_text_mode
+	player2_won:          
+	                      call   change_to_text_mode
 
-	; display player2 win text, and increase their score
-	                        mov    ah, 09h
-	                        lea    dx, player2_wins_text
-	                        int    21h
+	                      push   offset player2_wins_text
+	                      call   print_string
 
-	                        inc    p2_score
+	                      inc    p2_score
 
-	                        ret
-check_game_over endp
+	                      ret
+evaluate_game_state endp
 
+	; changes to text mode and move cursor to center of console
 change_to_text_mode proc near
-	                        mov    ax, 03h
-	                        int    10h
+	; change to text mode
+	                      mov    ax, 03h
+	                      int    10h
 
-	                        push   35
-	                        push   8
-	                        call   move_cursor
+	                      push   35
+	                      push   8
+	                      call   move_cursor
 
-	                        ret
+	                      ret
 change_to_text_mode endp
 
 draw_border proc near
 	; (0, 0) -> (max_width, 0)
-	draw_top:               
-	                        call   draw_border_pixel
+	draw_top:             
+	                      call   draw_border_pixel
 
-	                        inc    border_x
-	                        mov    ax, border_x
-	                        cmp    ax, max_width
-	                        jnz    draw_top
+	                      inc    border_x
+	                      mov    ax, border_x
+	                      cmp    ax, max_width
+	                      jnz    draw_top
 
 	; reset border pointers for next iter
-	                        mov    border_x, 0
-	                        mov    ax, max_height
-	                        dec    ax
-	                        mov    border_y, ax
+	                      mov    border_x, 0
+	                      mov    ax, max_height
+	                      dec    ax
+	                      mov    border_y, ax
 
 	; (0, max_height) -> (max_width, max_height)
-	draw_bottom:            
-	                        call   draw_border_pixel
+	draw_bottom:          
+	                      call   draw_border_pixel
 
-	                        inc    border_x
-	                        mov    ax, border_x
-	                        cmp    ax, max_width
-	                        jnz    draw_bottom
+	                      inc    border_x
+	                      mov    ax, border_x
+	                      cmp    ax, max_width
+	                      jnz    draw_bottom
 
 	; reset border pointers for next iter
-	                        mov    border_x, 0
-	                        mov    border_y, 0
+	                      mov    border_x, 0
+	                      mov    border_y, 0
 
 	; (0, 0) -> (0, max_height)
-	draw_left:              
-	                        call   draw_border_pixel
+	draw_left:            
+	                      call   draw_border_pixel
 
-	                        inc    border_y
-	                        mov    ax, border_y
-	                        cmp    ax, max_height
-	                        jnz    draw_left
+	                      inc    border_y
+	                      mov    ax, border_y
+	                      cmp    ax, max_height
+	                      jnz    draw_left
 
 	; reset border pointers for next iter
-	                        mov    border_y, 0
-	                        mov    ax, max_width
-	                        dec    ax
-	                        mov    border_x, ax
+	                      mov    border_y, 0
+	                      mov    ax, max_width
+	                      dec    ax
+	                      mov    border_x, ax
 
 	; (max_width, 0) -> (max_width, max_height)
-	draw_right:             
-	                        call   draw_border_pixel
+	draw_right:           
+	                      call   draw_border_pixel
 							
-	                        inc    border_y
-	                        mov    ax, border_y
-	                        cmp    ax, max_height
-	                        jnz    draw_right
+	                      inc    border_y
+	                      mov    ax, border_y
+	                      cmp    ax, max_height
+	                      jnz    draw_right
 
-	                        ret
+	                      ret
 draw_border endp
 
 draw_player1_head proc near
-	                        push   p1_y
-	                        push   p1_x
-	                        mov    bh, p1_head_color
-	                        push   bx
-	                        call   draw_pixel
+	                      push   p1_y
+	                      push   p1_x
+	                      mov    bh, p1_head_color
+	                      push   bx
+	                      call   draw_pixel
 
-	                        ret
+	                      ret
 draw_player1_head endp
 
 draw_player2_head proc near
-	                        push   p2_y
-	                        push   p2_x
-	                        mov    bh, p2_head_color
-	                        push   bx
-	                        call   draw_pixel
+	                      push   p2_y
+	                      push   p2_x
+	                      mov    bh, p2_head_color
+	                      push   bx
+	                      call   draw_pixel
 
-	                        ret
+	                      ret
 draw_player2_head endp
 
 draw_player1_trail proc near
-	                        push   p1_y
-	                        push   p1_x
-	                        mov    bh, p1_trail_color
-	                        push   bx
-	                        call   draw_pixel
+	                      push   p1_y
+	                      push   p1_x
+	                      mov    bh, p1_trail_color
+	                      push   bx
+	                      call   draw_pixel
 
-	                        ret
+	                      ret
 draw_player1_trail endp
 
 draw_player2_trail proc near
-	                        push   p2_y
-	                        push   p2_x
-	                        mov    bh, p2_trail_color
-	                        push   bx
-	                        call   draw_pixel
+	                      push   p2_y
+	                      push   p2_x
+	                      mov    bh, p2_trail_color
+	                      push   bx
+	                      call   draw_pixel
 
-	                        ret
+	                      ret
 draw_player2_trail endp
 
 
@@ -846,60 +1006,80 @@ draw_player2_trail endp
 
 	; moves the cursor to (row = arg2, col = arg1)
 move_cursor proc near
-	                        push   bp
-	                        mov    bp, sp
+	                      push   bp
+	                      mov    bp, sp
 
-	                        mov    ah, 02h
-	                        mov    bh, 0
-	                        mov    dh, [bp + 4]
-	                        mov    dl, [bp + 6]
-	                        int    10h
+	                      mov    ah, 02h
+	                      mov    bh, 0
+	                      mov    dh, [bp + 4]
+	                      mov    dl, [bp + 6]
+	                      int    10h
 
-	                        pop    bp
-	                        ret    4
+	                      pop    bp
+	                      ret    4
 move_cursor endp
 
 	; gets pixel color at (row = arg2, col = arg1), puts result in 'al' register
 get_pixel_color proc near
-	                        push   bp
-	                        mov    bp, sp
+	                      push   bp
+	                      mov    bp, sp
 
-	                        mov    ah, 0dh                  	; set config to get pixel
-	                        mov    bh, 0                    	; page number
-	                        mov    cx, [[bp + 4]]           	; row
-	                        mov    dx, [[bp + 6]]           	; col
-	                        int    10h                      	; al = result
+	                      mov    ah, 0dh                   	; set config to get pixel
+	                      mov    bh, 0                     	; page number
+	                      mov    cx, [[bp + 4]]            	; row
+	                      mov    dx, [[bp + 6]]            	; col
+	                      int    10h                       	; al = result
 
-	                        pop    bp
-	                        ret    4
+	                      pop    bp
+	                      ret    4
 get_pixel_color endp
 
 draw_border_pixel proc near
-	                        push   border_y
-	                        push   border_x
-	                        mov    bh, border_color
-	                        push   bx
-	                        call   draw_pixel
+	                      push   border_y
+	                      push   border_x
+	                      mov    bh, border_color
+	                      push   bx
+	                      call   draw_pixel
 
-	                        ret
+	                      ret
 draw_border_pixel endp
 
 draw_pixel proc near
-	                        push   bp
-	                        mov    bp, sp
+	                      push   bp
+	                      mov    bp, sp
 
-	                        mov    bx, [bp + 4]
+	                      mov    bx, [bp + 4]
 
-	                        mov    ah, 0ch                  	; set config to draw pixel
-	                        mov    al, bh                   	; color
-	                        mov    bh, 00h                  	; set page number
-	                        mov    cx, [bp + 6]             	; set col (x)
-	                        mov    dx, [bp + 8]             	; set row (y)
-	                        int    10h
+	                      mov    ah, 0ch                   	; set config to draw pixel
+	                      mov    al, bh                    	; color is in upper byte
+	                      mov    bh, 00h                   	; set page number
+	                      mov    cx, [bp + 6]              	; set col (x)
+	                      mov    dx, [bp + 8]              	; set row (y)
+	                      int    10h
 
-	                        pop    bp
-	                        ret    6
+	                      pop    bp
+	                      ret    6
 draw_pixel endp
+
+	; prints arg1
+print_string proc near
+	                      push   bp
+	                      mov    bp, sp
+
+	                      mov    ah, 09h
+	                      mov    dx, [bp + 4]
+	                      int    21h
+
+	                      pop    bp
+	                      ret    2
+print_string endp
+
+clear_screen proc near
+	                      mov    ax, 03h
+	                      int    10h
+
+	                      ret
+clear_screen endp
 
 code ends
 
