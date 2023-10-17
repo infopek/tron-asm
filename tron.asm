@@ -2,6 +2,7 @@ stck segment para 'stack'
 
 stck ends
 
+; TODO: add tie flag
 data segment para 'data'
 	; game & window-related
 	prev_time           db 0                     	; to check if time has elapsed
@@ -109,7 +110,6 @@ main proc far
 
 	                        call   clear_screen
 
-	                        xor    bx, bx
 	                        mov    ah, 00h                  	; set config mode to video mode
 	                        mov    al, 13h                  	; video mode 13 -> 320x200 (256 colors)
 	                        int    10h
@@ -170,6 +170,7 @@ main proc far
 	                        ret
 main endp
 
+; TODO: move to utils
 clear_screen proc near
 	                        mov    ax, 03h
 	                        int    10h
@@ -680,6 +681,7 @@ check_p2_oob proc near
 	                        ret
 check_p2_oob endp
 
+; TODO: this proc should only set flags, leave printing to main!
 check_game_over proc near
 	                        mov    is_gameover_flag, 1      	; set it to true originally
 	; states: nothing, p1 won, p2 won, tie
