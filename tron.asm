@@ -799,45 +799,41 @@ draw_border proc near
 draw_border endp
 
 draw_player1_head proc near
-	                        mov    ah, 0ch                  	; set config to draw pixel
-	                        mov    al, p1_head_color        	; color
-	                        mov    bh, 00h                  	; set page number
-	                        mov    cx, p1_x                 	; set col (x)
-	                        mov    dx, p1_y                 	; set row (y)
-	                        int    10h
+	                        push   p1_y
+	                        push   p1_x
+	                        mov    bh, p1_head_color
+	                        push   bx
+	                        call   draw_pixel
 
 	                        ret
 draw_player1_head endp
 
 draw_player2_head proc near
-	                        mov    ah, 0ch                  	; set config to draw pixel
-	                        mov    al, p2_head_color        	; color
-	                        mov    bh, 00h                  	; set page number
-	                        mov    cx, p2_x                 	; set col (x)
-	                        mov    dx, p2_y                 	; set row (y)
-	                        int    10h
+	                        push   p2_y
+	                        push   p2_x
+	                        mov    bh, p2_head_color
+	                        push   bx
+	                        call   draw_pixel
 
 	                        ret
 draw_player2_head endp
 
 draw_player1_trail proc near
-	                        mov    ah, 0ch                  	; set config to draw pixel
-	                        mov    al, p1_trail_color       	; color
-	                        mov    bh, 00h                  	; set page number
-	                        mov    cx, p1_x                 	; set col (x)
-	                        mov    dx, p1_y                 	; set row (y)
-	                        int    10h
+	                        push   p1_y
+	                        push   p1_x
+	                        mov    bh, p1_trail_color
+	                        push   bx
+	                        call   draw_pixel
 
 	                        ret
 draw_player1_trail endp
 
 draw_player2_trail proc near
-	                        mov    ah, 0ch                  	; set config to draw pixel
-	                        mov    al, p2_trail_color       	; color
-	                        mov    bh, 00h                  	; set page number
-	                        mov    cx, p2_x                 	; set col (x)
-	                        mov    dx, p2_y                 	; set row (y)
-	                        int    10h
+	                        push   p2_y
+	                        push   p2_x
+	                        mov    bh, p2_trail_color
+	                        push   bx
+	                        call   draw_pixel
 
 	                        ret
 draw_player2_trail endp
@@ -877,15 +873,31 @@ get_pixel_color proc near
 get_pixel_color endp
 
 draw_border_pixel proc near
-	                        mov    ah, 0ch                  	; set config to draw pixel
-	                        mov    al, border_color         	; color
-	                        mov    bh, 00h                  	; set page number
-	                        mov    cx, border_x             	; set col (x)
-	                        mov    dx, border_y             	; set row (y)
-	                        int    10h
+	                        push   border_y
+	                        push   border_x
+	                        mov    bh, border_color
+	                        push   bx
+	                        call   draw_pixel
 
 	                        ret
 draw_border_pixel endp
+
+draw_pixel proc near
+	                        push   bp
+	                        mov    bp, sp
+
+	                        mov    bx, [bp + 4]
+
+	                        mov    ah, 0ch                  	; set config to draw pixel
+	                        mov    al, bh                   	; color
+	                        mov    bh, 00h                  	; set page number
+	                        mov    cx, [bp + 6]             	; set col (x)
+	                        mov    dx, [bp + 8]             	; set row (y)
+	                        int    10h
+
+	                        pop    bp
+	                        ret    6
+draw_pixel endp
 
 code ends
 
